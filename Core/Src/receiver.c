@@ -1,7 +1,3 @@
-/*CH1 → PC6
-CH2 → PC7
-CH3 → PB14
-CH4 → PB15*/
 #include "receiver.h"
 
 #define PULSE_MIN    1000
@@ -9,6 +5,8 @@ CH4 → PB15*/
 #define PULSE_MID    1500
 #define DEADBAND     40        
 #define TIMEOUT_MS   200       
+
+volatile uint32_t debug_raw_width = 0;
 
 void Receiver_Init(Receiver *r, TIM_HandleTypeDef *htim, uint32_t channel)
 {
@@ -34,7 +32,9 @@ void Receiver_HandleCapture(Receiver *r)
         uint32_t width;
         if (cap >= r->last_capture) width = cap - r->last_capture;
         else width = (0xFFFF - r->last_capture) + cap;
-      
+        
+        debug_raw_width = width;
+        
         if (width >= 800 && width <= 2200) {
             r->pulse_width = (uint16_t)width;
             r->last_update = HAL_GetTick();

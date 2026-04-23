@@ -34,7 +34,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -57,10 +56,7 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-volatile uint16_t dbg_ch1 = 0;
-volatile uint16_t dbg_ch2 = 0;
-volatile int16_t  dbg_left = 0;
-volatile int16_t  dbg_right = 0;
+extern Receiver *rx_all[5]; 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -81,7 +77,6 @@ static void MX_TIM8_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
