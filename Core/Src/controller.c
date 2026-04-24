@@ -8,8 +8,8 @@ static Receiver rx_turning;   // CH1 PA6 LR
 static Receiver rx_throttle;   // CH2 PA7 UD
 
 void Controller_Init(void) {
-    Receiver_Init(&rx_turning, &htim3, TIM_CHANNEL_1);  // PA6
-    Receiver_Init(&rx_throttle, &htim3, TIM_CHANNEL_2);  // PA7
+    Receiver_Init(&rx_turning, &htim3, TIM_CHANNEL_2);  // PA6
+    Receiver_Init(&rx_throttle, &htim3, TIM_CHANNEL_1);  // PA7
 }
 
 void Controller_Update(void) {
@@ -36,9 +36,9 @@ void Controller_Update(void) {
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
     if (htim == &htim3) {
         switch (htim->Channel) {
-            case HAL_TIM_ACTIVE_CHANNEL_1:
-                Receiver_HandleCapture(&rx_turning); break;
             case HAL_TIM_ACTIVE_CHANNEL_2:
+                Receiver_HandleCapture(&rx_turning); break;
+            case HAL_TIM_ACTIVE_CHANNEL_1:
                 Receiver_HandleCapture(&rx_throttle); break;
             default: break;
         }

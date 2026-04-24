@@ -6,13 +6,13 @@ extern TIM_HandleTypeDef htim8;
 #define ESC_MIN    500
 #define ESC_MAX   2500
 
-static int8_t dir_m1 = +1;
-static int8_t dir_m2 = +1;
+static int8_t dir_m1 = -1;
+static int8_t dir_m2 = -1;
 
 static uint16_t pct_to_us(int16_t pct) {
     if (pct >  100) pct =  100;
     if (pct < -100) pct = -100;
-    return (uint16_t)(ESC_STOP + pct * 10);
+    return (uint16_t)(ESC_STOP + pct * 5);
 }
 
 void Motor_Init(void) {
