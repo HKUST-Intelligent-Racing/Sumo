@@ -7,5 +7,6 @@ void Motor_Init(void);
 void Motor_Set(int8_t left, int8_t right);   
 void Motor_Stop(void);
 void esc_calibrate(void);
+void Motor_Brake(void);
 
 #endif

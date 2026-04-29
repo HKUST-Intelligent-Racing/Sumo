@@ -48,6 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "./Core/Src/motor.c"
     "./Core/Src/controller.c"
     "./Core/Src/receiver.c"
+    "./Core/Src/sensor.c"
 )
 
 # Add include paths
