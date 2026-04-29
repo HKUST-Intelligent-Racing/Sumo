@@ -1,17 +1,3 @@
-#include "motor.h"
-#include "stm32f4xx_hal.h"
-extern TIM_HandleTypeDef htim8;
-
-#define ESC_STOP  1500
-#define ESC_MIN    500
-#define ESC_MAX   2500
-
-static int8_t dir_m1 = -1; 
-static int8_t dir_m2 = -1;
-
-static int8_t last_left  = 0;
-static int8_t last_right = 0;
-
 static uint16_t pct_to_us(int16_t pct) {
     if (pct >  100) pct =  100;
     if (pct < -100) pct = -100;
@@ -30,37 +16,10 @@ void Motor_Init(void) {
 }
 
 void Motor_Set(int8_t left, int8_t right) {
-    if ((last_left > 5 && left < -5) || (last_left < -5 && left > 5)) {
-        __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, ESC_STOP);
-        HAL_Delay(30);
-    }
-    if ((last_right > 5 && right < -5) || (last_right < -5 && right > 5)) {
-        __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, ESC_STOP);
-        HAL_Delay(30);
-    }
-
-    last_left  = left;
-    last_right = right;
-
     __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2,
                           pct_to_us(left  * dir_m1));
     __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1,
                           pct_to_us(right * dir_m2));
-}
-
-void Motor_Brake(void) {
-    if (last_left > 0 || last_right > 0) {
-        __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, pct_to_us(-15 * dir_m1));
-        __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, pct_to_us(-15 * dir_m2));
-    } else if (last_left < 0 || last_right < 0) {
-        __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, pct_to_us(15 * dir_m1));
-        __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, pct_to_us(15 * dir_m2));
-    }
-    HAL_Delay(50);
-    __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_1, ESC_STOP);
-    __HAL_TIM_SET_COMPARE(&htim8, TIM_CHANNEL_2, ESC_STOP);
-    last_left = 0;
-    last_right = 0;
 }
 
 void Motor_Stop(void) {

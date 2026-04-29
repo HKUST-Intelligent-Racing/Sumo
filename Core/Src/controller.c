@@ -24,22 +24,20 @@ static uint8_t is_auto_mode(void) {
     return (rx_switch.pulse_width > 1700) ? 1 : 0;
 }
 
-void manual_mode(void) {
-    if (!Receiver_IsAlive(&rx_turning)
-        || !Receiver_IsAlive(&rx_throttle))
+static void manual_mode(void) {
+    if (!Receiver_IsAlive(&rx_throttle)
+        || !Receiver_IsAlive(&rx_turning))
     {
         Motor_Stop();
         return;
     }
 
     int16_t throttle = Receiver_GetScaled(&rx_throttle, 100);
-    int16_t turning = -Receiver_GetScaled(&rx_turning, 100);
+    int16_t turning = Receiver_GetScaled(&rx_turning, 100);
 
-    if (throttle == 0 && turning == 0) {
-        Motor_Brake();
-        return;
-    }
-    
+    if (throttle > -10 && throttle < 10) throttle = 0;
+    if (turning > -10 && turning < 10) turning = 0;
+
     int16_t left  = throttle + turning;
     int16_t right = throttle - turning;
     if (left  >  100) left  =  100;
