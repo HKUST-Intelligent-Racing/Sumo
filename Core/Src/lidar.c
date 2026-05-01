@@ -7,6 +7,12 @@
 #define PKT_VER        0x2C
 #define POINTS_PER_PKT 12
 
+volatile uint16_t dbg_wr_idx = 0;
+volatile uint16_t dbg_rd_idx = 0;
+volatile uint16_t dbg_pkt_count = 0;
+volatile uint16_t dbg_point_count = 0;
+volatile uint8_t  dbg_first_byte = 0;
+
 static const uint8_t CrcTable[256] = {
     0x00,0x4d,0x9a,0xd7,0x79,0x34,0xe3,0xae, 0xf2,0xbf,0x68,0x25,0x8b,0xc6,0x11,0x5c,
     0xa9,0xe4,0x33,0x7e,0xd0,0x9d,0x4a,0x07, 0x5b,0x16,0xc1,0x8c,0x22,0x6f,0xb8,0xf5,
@@ -45,7 +51,7 @@ static uint8_t calc_crc8(const uint8_t *p, uint16_t len) {
 }
 
 void Lidar_Init(void) {
-    HAL_UART_Receive_DMA(&huart2, ring, LIDAR_RING_SIZE);
+    HAL_UART_Receive_DMA(&huart1, ring, LIDAR_RING_SIZE);
 }
 
 static void parse_packet(const uint8_t *p) {
@@ -76,7 +82,11 @@ static void parse_packet(const uint8_t *p) {
 }
 
 void Lidar_Process(void) {
-    uint16_t wr_idx = LIDAR_RING_SIZE - __HAL_DMA_GET_COUNTER(huart2.hdmarx);
+    uint16_t wr_idx = LIDAR_RING_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx);
+    
+    dbg_wr_idx = wr_idx;           
+    dbg_rd_idx = rd_idx;           
+    dbg_first_byte = ring[wr_idx > 0 ? wr_idx - 1 : 0]; 
 
     while (rd_idx != wr_idx) {
         if (ring[rd_idx] == PKT_HEADER) {
@@ -86,15 +96,19 @@ void Lidar_Process(void) {
                 if (avail < PKT_SIZE) break;
 
                 uint8_t pkt[PKT_SIZE];
-                for (int i = 0; i < PKT_SIZE; i++) pkt[i] = ring[(rd_idx + i) & (LIDAR_RING_SIZE - 1)];
+                for (int i = 0; i < PKT_SIZE; i++)
+                    pkt[i] = ring[(rd_idx + i) & (LIDAR_RING_SIZE - 1)];
 
                 parse_packet(pkt);
+                dbg_pkt_count++;       // 成功解析幾包
                 rd_idx = (rd_idx + PKT_SIZE) & (LIDAR_RING_SIZE - 1);
                 continue;
             }
         }
         rd_idx = (rd_idx + 1) & (LIDAR_RING_SIZE - 1);
     }
+    
+    dbg_point_count = point_count;
 }
 
 LidarTarget Lidar_GetNearest(float fov_deg, uint16_t min_mm, uint16_t max_mm) {
@@ -123,7 +137,7 @@ EnemyState Lidar_GetEnemyState(float fov_deg, uint16_t min_mm, uint16_t max_mm) 
     LidarTarget t = Lidar_GetNearest(fov_deg, min_mm, max_mm);
 
     if (t.dist_mm <= max_mm) { 
-        state.active = 1;
+        state.enemy_detected = 1;
         state.dist_mm = t.dist_mm;
         state.angle_deg = t.angle_deg;
 
@@ -136,7 +150,7 @@ EnemyState Lidar_GetEnemyState(float fov_deg, uint16_t min_mm, uint16_t max_mm) 
         state.speed_norm = 1.0f - (fabsf(turn) * 0.3f); 
         
     } else { 
-        state.active = 0;
+        state.enemy_detected = 0;
         state.dist_mm = 0;
         state.angle_deg = 0.0f;
         state.turn_norm = 0.0f;

@@ -81,6 +81,8 @@ void Error_Handler(void);
 #define MOTORL_GPIO_Port GPIOC
 #define MOTORR_Pin GPIO_PIN_7
 #define MOTORR_GPIO_Port GPIOC
+#define lidar_Pin GPIO_PIN_8
+#define lidar_GPIO_Port GPIOC
 #define Ariel_TOF_Pin GPIO_PIN_9
 #define Ariel_TOF_GPIO_Port GPIOC
 #define TOF3_Pin GPIO_PIN_8

@@ -51,16 +51,16 @@ void Sensor_EdgeAvoid(void) {
     EdgeState e = Sensor_ReadEdge();
 
     if (e.left && e.right) {
-        Motor_Set(-40, -40);
-        HAL_Delay(150);
-        Motor_Set(40, -40);
-        HAL_Delay(150);
+        Motor_Set(-50, -50);
+        HAL_Delay(350);
+        Motor_Set(60, -60);
+        HAL_Delay(650);
     } else if (e.left) {
-        Motor_Set(-20, -50);
-        HAL_Delay(150);
+        Motor_Set(30, -70);
+        HAL_Delay(750);
     } else if (e.right) {
-        Motor_Set(-50, -20);
-        HAL_Delay(150);
+        Motor_Set(-70, 30);
+        HAL_Delay(750);
     }
     Motor_Stop();
 }

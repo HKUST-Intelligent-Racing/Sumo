@@ -10,7 +10,7 @@ static Receiver rx_turning;   // CH1 PA6 LR
 static Receiver rx_throttle;   // CH2 PA7 UD
 static Receiver rx_switch;   // CH3 PB0 auto/manual
 
-//static uint32_t next_turn = 0;
+static uint32_t next_turn = 0;
 
 void Controller_Init(void) {
     Receiver_Init(&rx_turning, &htim3, TIM_CHANNEL_2);  // PA6
@@ -33,7 +33,7 @@ static void manual_mode(void) {
     }
 
     int16_t throttle = Receiver_GetScaled(&rx_throttle, 100);
-    int16_t turning = Receiver_GetScaled(&rx_turning, 100);
+    int16_t turning = -Receiver_GetScaled(&rx_turning, 100);
 
     if (throttle > -10 && throttle < 10) throttle = 0;
     if (turning > -10 && turning < 10) turning = 0;
@@ -48,15 +48,16 @@ static void manual_mode(void) {
     Motor_Set((int8_t)left, (int8_t)right);
 }
 
-static void auto_mode(void) {
+/*static void auto_mode(void) {
     EdgeState e = Sensor_ReadEdge();
     if (e.left || e.right) {
         Sensor_EdgeAvoid();
     } else {
         Motor_Stop(); 
     }
-}
-/*static void auto_mode(void) {
+}*/
+
+static void auto_mode(void) {
     EdgeState e = Sensor_ReadEdge();
     if (e.left || e.right) {
         Sensor_EdgeAvoid();
@@ -76,7 +77,7 @@ static void auto_mode(void) {
     }
 
     Motor_Set(40, 40);
-}*/
+}
 
 void Controller_Update(void) {
     if (is_auto_mode()) {
