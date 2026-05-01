@@ -49,6 +49,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "./Core/Src/controller.c"
     "./Core/Src/receiver.c"
     "./Core/Src/sensor.c"
+    "./Core/Src/lidar.c"
 )
 
 # Add include paths

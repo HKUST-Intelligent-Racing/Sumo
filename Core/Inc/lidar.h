@@ -4,6 +4,7 @@
 #include "stm32f4xx_hal.h"
 
 extern UART_HandleTypeDef huart2;
+extern UART_HandleTypeDef huart1;
 
 #define LIDAR_RING_SIZE    2048
 #define MAX_LIDAR_POINTS   480

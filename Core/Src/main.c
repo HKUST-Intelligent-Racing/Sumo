@@ -123,9 +123,8 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
-  //__HAL_TIM_MOE_ENABLE(&htim8);
-  //HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);  //lidar 
-  //Lidar_Init();
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);  //lidar 
+  Lidar_Init();
   Motor_Init();
   Sensor_Init();
   Controller_Init();
@@ -135,15 +134,15 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /*Lidar_Process();
+    Lidar_Process();
 
     EnemyState enemy = Lidar_GetEnemyState(180.0f, 50, 700);
     dbg_enemy_active = enemy.enemy_detected;
     dbg_enemy_angle  = enemy.angle_deg;
     dbg_enemy_dist   = enemy.dist_mm;
-    */
-    Controller_Update();
-    HAL_Delay(20);
+    
+    //Controller_Update();
+    //HAL_Delay(20);
     //Sensor_ReadEdge();
     /* USER CODE END WHILE */
 

@@ -32,7 +32,7 @@ static void manual_mode(void) {
         return;
     }
 
-    int16_t throttle = Receiver_GetScaled(&rx_throttle, 100);
+    int16_t throttle =  Receiver_GetScaled(&rx_throttle, 100);
     int16_t turning = -Receiver_GetScaled(&rx_turning, 100);
 
     if (throttle > -10 && throttle < 10) throttle = 0;
