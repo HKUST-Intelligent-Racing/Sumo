@@ -100,7 +100,7 @@ void Lidar_Process(void) {
                     pkt[i] = ring[(rd_idx + i) & (LIDAR_RING_SIZE - 1)];
 
                 parse_packet(pkt);
-                dbg_pkt_count++;       // 成功解析幾包
+                dbg_pkt_count++;    
                 rd_idx = (rd_idx + PKT_SIZE) & (LIDAR_RING_SIZE - 1);
                 continue;
             }
