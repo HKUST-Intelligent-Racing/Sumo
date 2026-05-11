@@ -172,19 +172,38 @@ LidarTarget Lidar_GetNearest(float fov_deg, uint16_t min_mm, uint16_t max_mm)
     float half = fov_deg / 2.0f;
 
     for (uint16_t i = 0; i < frame_cnt; i++) {
-        
         float a = frame_buf[i].angle;
         if (a > 180.0f) a -= 360.0f;
 
-        if (a < -half || a > half)        continue;
-
+        if (a < -half || a > half)       continue;
         uint16_t d = frame_buf[i].dist;
-        if (d < min_mm || d > max_mm)     continue;
-        if (frame_buf[i].intensity < 10)   continue;
+        if (d < min_mm || d > max_mm)    continue;
+        if (frame_buf[i].intensity < 10) continue;
+
+        float  angle_sum = 0.0f;
+        int    cluster_count = 0;
+
+        for (uint16_t j = 0; j < frame_cnt; j++) {
+            float aj = frame_buf[j].angle;
+            if (aj > 180.0f) aj -= 360.0f;
+            float diff = aj - a;
+            if (diff < -5.0f || diff > 5.0f) continue;
+
+            uint16_t dj = frame_buf[j].dist;
+            int16_t ddiff = (int16_t)dj - (int16_t)d;
+            if (ddiff < -100 || ddiff > 100) continue;
+
+            angle_sum += aj;
+            cluster_count++;
+        }
+
+        if (cluster_count < 3) continue; 
+
+        float center_angle = angle_sum / cluster_count;
 
         if (d < result.dist_mm) {
             result.dist_mm   = d;
-            result.angle_deg = a;
+            result.angle_deg = center_angle;   
         }
     }
     return result;
