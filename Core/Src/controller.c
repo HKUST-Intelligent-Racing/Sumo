@@ -76,7 +76,7 @@ static void auto_mode(void) {
         next_turn = HAL_GetTick() + 800 + (HAL_GetTick() % 500);
     }
 
-    Motor_Set(40, 40);
+    Motor_Set(80, 80);
 }
 
 void Controller_Update(void) {

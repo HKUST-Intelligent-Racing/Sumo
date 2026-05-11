@@ -136,7 +136,7 @@ int main(void)
   {
     Lidar_Process();
 
-    EnemyState enemy = Lidar_GetEnemyState(180.0f, 50, 700);
+    EnemyState enemy = Lidar_GetEnemyState(180.0f, 10, 800);
     dbg_enemy_active = enemy.enemy_detected;
     dbg_enemy_angle  = enemy.angle_deg;
     dbg_enemy_dist   = enemy.dist_mm;

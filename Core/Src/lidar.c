@@ -1,17 +1,23 @@
+/*
+ Packet layout (47 bytes):
+ [0]      0x54   header
+ [1]      0x2C   ver+len
+ [2-3]    speed  (deg/s * 100, little-endian)
+ [4-5]    start_angle (deg * 100, little-endian)
+ [6-41]   12 x { dist_lo, dist_hi, intensity } = 36 bytes
+ [42-43]  end_angle (deg * 100, little-endian)
+ [44-45]  timestamp (ms, little-endian)
+ [46]     CRC8
+ */
+
 #include "lidar.h"
 #include <string.h>
 #include <math.h>
 
-#define PKT_SIZE       47
-#define PKT_HEADER     0x54
-#define PKT_VER        0x2C
-#define POINTS_PER_PKT 12
-
-volatile uint16_t dbg_wr_idx = 0;
-volatile uint16_t dbg_rd_idx = 0;
-volatile uint16_t dbg_pkt_count = 0;
-volatile uint16_t dbg_point_count = 0;
-volatile uint8_t  dbg_first_byte = 0;
+#define PKT_SIZE        47
+#define PKT_HEADER      0x54
+#define PKT_VER_LEN     0x2C
+#define POINTS_PER_PKT  12
 
 static const uint8_t CrcTable[256] = {
     0x00,0x4d,0x9a,0xd7,0x79,0x34,0xe3,0xae, 0xf2,0xbf,0x68,0x25,0x8b,0xc6,0x11,0x5c,
@@ -32,129 +38,178 @@ static const uint8_t CrcTable[256] = {
     0xf4,0xb9,0x6e,0x23,0x8d,0xc0,0x17,0x5a, 0x06,0x4b,0x9c,0xd1,0x7f,0x32,0xe5,0xa8
 };
 
+typedef struct {
+    float    angle;     
+    uint16_t dist;      
+    uint8_t  intensity;
+} RawPoint;
+
 static uint8_t  ring[LIDAR_RING_SIZE];
 static uint16_t rd_idx = 0;
 
-typedef struct {
-    float    angle;
-    uint16_t dist;
-    uint8_t  intensity;
-} Point;
+static RawPoint build_buf[MAX_LIDAR_POINTS];
+static uint16_t build_cnt = 0;
 
-static Point    points[MAX_LIDAR_POINTS];
-static volatile uint16_t point_count = 0;
+static RawPoint frame_buf[MAX_LIDAR_POINTS];
+static uint16_t frame_cnt = 0;
 
-static uint8_t calc_crc8(const uint8_t *p, uint16_t len) {
+static float last_end_angle = -1.0f;
+
+volatile uint16_t dbg_wr_idx      = 0;
+volatile uint16_t dbg_rd_idx      = 0;
+volatile uint32_t dbg_pkt_count   = 0;
+volatile uint32_t dbg_crc_fail    = 0;
+volatile uint32_t dbg_frame_count = 0;
+volatile uint16_t dbg_build_cnt   = 0;
+volatile uint16_t dbg_frame_cnt   = 0;
+
+static uint8_t calc_crc8(const uint8_t *p, uint16_t len)
+{
     uint8_t crc = 0;
-    for (uint16_t i = 0; i < len; i++) crc = CrcTable[(crc ^ p[i]) & 0xFF];
+    for (uint16_t i = 0; i < len; i++)
+        crc = CrcTable[crc ^ p[i]];
     return crc;
 }
 
-void Lidar_Init(void) {
+void Lidar_Init(void)
+{
+    memset(ring, 0, sizeof(ring));
+    build_cnt      = 0;
+    frame_cnt      = 0;
+    rd_idx         = 0;
+    last_end_angle = -1.0f;
+
     HAL_UART_Receive_DMA(&huart1, ring, LIDAR_RING_SIZE);
 }
 
-static void parse_packet(const uint8_t *p) {
-    if (calc_crc8(p, 46) != p[46]) return;
+static void parse_packet(const uint8_t *p)
+{
+    float start_ang = (float)(p[4] | (p[5] << 8)) / 100.0f;
+    float end_ang   = (float)(p[42] | (p[43] << 8)) / 100.0f;
 
-    float start = (p[4] | (p[5] << 8)) / 100.0f;
-    float end   = (p[42] | (p[43] << 8)) / 100.0f;
-    float step  = end - start;
-    
-    if (step < 0) step += 360.0f;
-    step /= (POINTS_PER_PKT - 1);
+    if (last_end_angle >= 0.0f && start_ang < last_end_angle) {
+        memcpy(frame_buf, build_buf, build_cnt * sizeof(RawPoint));
+        frame_cnt = build_cnt;
+        build_cnt = 0;
+        dbg_frame_count++;
+    }
+    last_end_angle = end_ang;
 
-    if (end < start) { point_count = 0; } 
+    float span = end_ang - start_ang;
+    if (span < 0.0f) span += 360.0f;
+    float step = (POINTS_PER_PKT > 1) ? span / (POINTS_PER_PKT - 1) : 0.0f;
 
     for (int i = 0; i < POINTS_PER_PKT; i++) {
         const uint8_t *q = &p[6 + i * 3];
-        uint16_t dist = q[0] | (q[1] << 8);
-        float ang = start + step * i;
-        if (ang >= 360.0f) ang -= 360.0f;
+        uint16_t dist      = (uint16_t)(q[0] | (q[1] << 8));
+        uint8_t  intensity = q[2];
 
-        if (point_count < MAX_LIDAR_POINTS) {
-            points[point_count].angle     = ang;
-            points[point_count].dist      = dist;
-            points[point_count].intensity = q[2];
-            point_count++;
+        float ang = start_ang + step * i;
+        if (ang >= 360.0f) ang -= 360.0f;
+        if (ang <    0.0f) ang += 360.0f;
+
+        if (build_cnt < MAX_LIDAR_POINTS) {
+            build_buf[build_cnt].angle     = ang;
+            build_buf[build_cnt].dist      = dist;
+            build_buf[build_cnt].intensity = intensity;
+            build_cnt++;
         }
     }
+
+    dbg_build_cnt = build_cnt;
+    dbg_frame_cnt = frame_cnt;
 }
 
-void Lidar_Process(void) {
-    uint16_t wr_idx = LIDAR_RING_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx);
-    
-    dbg_wr_idx = wr_idx;           
-    dbg_rd_idx = rd_idx;           
-    dbg_first_byte = ring[wr_idx > 0 ? wr_idx - 1 : 0]; 
+void Lidar_Process(void){
+    uint16_t wr_idx = (LIDAR_RING_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx))
+                      & (LIDAR_RING_SIZE - 1);
+
+    dbg_wr_idx = wr_idx;
+    dbg_rd_idx = rd_idx;
 
     while (rd_idx != wr_idx) {
-        if (ring[rd_idx] == PKT_HEADER) {
-            uint16_t next = (rd_idx + 1) & (LIDAR_RING_SIZE - 1);
-            if (ring[next] == PKT_VER) {
-                uint16_t avail = (wr_idx - rd_idx) & (LIDAR_RING_SIZE - 1);
-                if (avail < PKT_SIZE) break;
+        uint16_t avail = (wr_idx - rd_idx) & (LIDAR_RING_SIZE - 1);
 
-                uint8_t pkt[PKT_SIZE];
-                for (int i = 0; i < PKT_SIZE; i++)
-                    pkt[i] = ring[(rd_idx + i) & (LIDAR_RING_SIZE - 1)];
+        if (avail < 2) break;
 
+        uint8_t b0 = ring[rd_idx];
+        uint8_t b1 = ring[(rd_idx + 1) & (LIDAR_RING_SIZE - 1)];
+
+        if (b0 == PKT_HEADER && b1 == PKT_VER_LEN) {
+            if (avail < PKT_SIZE) break;
+
+            uint8_t pkt[PKT_SIZE];
+            for (int i = 0; i < PKT_SIZE; i++)
+                pkt[i] = ring[(rd_idx + i) & (LIDAR_RING_SIZE - 1)];
+
+            if (calc_crc8(pkt, 46) == pkt[46]) {
                 parse_packet(pkt);
-                dbg_pkt_count++;    
+                dbg_pkt_count++;
                 rd_idx = (rd_idx + PKT_SIZE) & (LIDAR_RING_SIZE - 1);
-                continue;
+            } else {
+                dbg_crc_fail++;
+                rd_idx = (rd_idx + 1) & (LIDAR_RING_SIZE - 1);
             }
-        }
-        rd_idx = (rd_idx + 1) & (LIDAR_RING_SIZE - 1);
-    }
-    
-    dbg_point_count = point_count;
-}
-
-LidarTarget Lidar_GetNearest(float fov_deg, uint16_t min_mm, uint16_t max_mm) {
-    LidarTarget t = { 0.0f, 9999 };
-    float half_fov = fov_deg / 2.0f;
-
-    for (uint16_t i = 0; i < point_count; i++) {
-        float a = points[i].angle;
-        if (a > 180.0f) a -= 360.0f; 
-
-        if (a < -half_fov || a > half_fov) continue; 
-        uint16_t d = points[i].dist;
-        if (d < min_mm || d > max_mm) continue;    
-        if (points[i].intensity < 10) continue;      
-
-        if (d < t.dist_mm) {
-            t.dist_mm = d;
-            t.angle_deg = a;
+        } else {
+            rd_idx = (rd_idx + 1) & (LIDAR_RING_SIZE - 1);
         }
     }
-    return t;
 }
 
-EnemyState Lidar_GetEnemyState(float fov_deg, uint16_t min_mm, uint16_t max_mm) {
-    EnemyState state;
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1) {
+        HAL_UART_DMAStop(huart);
+        __HAL_UART_CLEAR_OREFLAG(huart);
+        rd_idx = 0;
+        HAL_UART_Receive_DMA(huart, ring, LIDAR_RING_SIZE);
+    }
+}
+
+LidarTarget Lidar_GetNearest(float fov_deg, uint16_t min_mm, uint16_t max_mm)
+{
+    LidarTarget result = { .angle_deg = 0.0f, .dist_mm = 0xFFFF };
+    float half = fov_deg / 2.0f;
+
+    for (uint16_t i = 0; i < frame_cnt; i++) {
+        
+        float a = frame_buf[i].angle;
+        if (a > 180.0f) a -= 360.0f;
+
+        if (a < -half || a > half)        continue;
+
+        uint16_t d = frame_buf[i].dist;
+        if (d < min_mm || d > max_mm)     continue;
+        if (frame_buf[i].intensity < 10)   continue;
+
+        if (d < result.dist_mm) {
+            result.dist_mm   = d;
+            result.angle_deg = a;
+        }
+    }
+    return result;
+}
+
+EnemyState Lidar_GetEnemyState(float fov_deg, uint16_t min_mm, uint16_t max_mm)
+{
+    EnemyState s;
+    memset(&s, 0, sizeof(s));
+
     LidarTarget t = Lidar_GetNearest(fov_deg, min_mm, max_mm);
 
-    if (t.dist_mm <= max_mm) { 
-        state.enemy_detected = 1;
-        state.dist_mm = t.dist_mm;
-        state.angle_deg = t.angle_deg;
-
-        float turn = t.angle_deg / 30.0f; 
-        
-        if (turn > 1.0f) turn = 1.0f;
-        if (turn < -1.0f) turn = -1.0f;
-        state.turn_norm = turn;
-
-        state.speed_norm = 1.0f - (fabsf(turn) * 0.3f); 
-        
-    } else { 
-        state.enemy_detected = 0;
-        state.dist_mm = 0;
-        state.angle_deg = 0.0f;
-        state.turn_norm = 0.0f;
-        state.speed_norm = 0.0f;
+    if (t.dist_mm == 0xFFFF) {
+        return s; 
     }
-    return state;
+
+    s.enemy_detected = 1;
+    s.dist_mm        = t.dist_mm;
+    s.angle_deg      = t.angle_deg;
+
+    float turn = t.angle_deg / 30.0f;
+    if (turn >  1.0f) turn =  1.0f;
+    if (turn < -1.0f) turn = -1.0f;
+    s.turn_norm  = turn;
+    s.speed_norm = 1.0f - fabsf(turn) * 0.3f;
+
+    return s;
 }
