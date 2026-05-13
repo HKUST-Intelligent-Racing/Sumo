@@ -166,7 +166,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 }
 
-LidarTarget Lidar_GetNearest(float fov_deg, uint16_t min_mm, uint16_t max_mm)
+/*LidarTarget Lidar_GetNearest(float fov_deg, uint16_t min_mm, uint16_t max_mm)
 {
     LidarTarget result = { .angle_deg = 0.0f, .dist_mm = 0xFFFF };
     float half = fov_deg / 2.0f;
@@ -197,7 +197,7 @@ LidarTarget Lidar_GetNearest(float fov_deg, uint16_t min_mm, uint16_t max_mm)
             cluster_count++;
         }
 
-        if (cluster_count < 3) continue; 
+        if (cluster_count < 5) continue; 
 
         float center_angle = angle_sum / cluster_count;
 
@@ -206,6 +206,47 @@ LidarTarget Lidar_GetNearest(float fov_deg, uint16_t min_mm, uint16_t max_mm)
             result.angle_deg = center_angle;   
         }
     }
+    return result;
+}*/
+
+LidarTarget Lidar_GetNearest(float fov_deg, uint16_t min_mm, uint16_t max_mm)
+{
+    LidarTarget result = { .angle_deg = 0.0f, .dist_mm = 0xFFFF };
+    float half = fov_deg / 2.0f;
+
+    for (uint16_t i = 0; i < build_cnt; i++) {
+        float a = build_buf[i].angle;
+        if (a > 180.0f) a -= 360.0f;
+        if (a < -half || a > half)       continue;
+        uint16_t d = build_buf[i].dist;
+        if (d < min_mm || d > max_mm)    continue;
+        if (build_buf[i].intensity < 10) continue;
+        if (d < result.dist_mm) result.dist_mm = d;
+    }
+
+    if (result.dist_mm == 0xFFFF) return result;
+
+    float angle_sum = 0.0f;
+    int   count     = 0;
+    for (uint16_t i = 0; i < frame_cnt; i++) {
+        float a = frame_buf[i].angle;
+        if (a > 180.0f) a -= 360.0f;
+        if (a < -half || a > half)       continue;
+        uint16_t d = frame_buf[i].dist;
+        if (d < min_mm || d > max_mm)    continue;
+        if (frame_buf[i].intensity < 10) continue;
+        int16_t ddiff = (int16_t)d - (int16_t)result.dist_mm;
+        if (ddiff < -150 || ddiff > 150) continue;  //size of the sumo
+        angle_sum += a;
+        count++;
+    }
+
+    if (count < 2) {
+        result.dist_mm = 0xFFFF; 
+        return result;
+    }
+
+    result.angle_deg = angle_sum / count;
     return result;
 }
 

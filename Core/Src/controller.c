@@ -4,6 +4,7 @@
 #include "sensor.h"
 #include "stm32f4xx_hal.h"
 #include "lidar.h"
+#include <math.h>
 
 extern TIM_HandleTypeDef htim3;
 
@@ -55,22 +56,39 @@ static void manual_mode(void) {
 }
 
 static void auto_mode(void) {
-    EdgeState e = Sensor_ReadEdge();
+    
+    /*EdgeState e = Sensor_ReadEdge();
     if (e.left || e.right) {
         Sensor_EdgeAvoid();
         return;
-    }
-    EnemyState enemy = Lidar_GetEnemyState(180.0f, 10, 600);
+    }*/
+    EnemyState enemy = Lidar_GetEnemyState(180.0f, 10, 300);
     dbg_auto_enemy_active = enemy.enemy_detected;
     dbg_auto_enemy_angle  = enemy.angle_deg;
     dbg_auto_enemy_dist   = enemy.dist_mm;
-
+    
     if (enemy.enemy_detected) {
-        int16_t throttle = (int16_t)(enemy.speed_norm * 80);
-        int16_t steering = (int16_t)(enemy.turn_norm  * 80);
+        float angle = enemy.angle_deg;
 
-        int16_t left  = throttle + steering;
-        int16_t right = throttle - steering;
+        float turn_norm = angle / 45.0f;
+        if (turn_norm >  1.0f) turn_norm =  1.0f;
+        if (turn_norm < -1.0f) turn_norm = -1.0f;
+
+        int16_t left, right;
+
+        if (fabsf(angle) > 20.0f) {
+            int16_t spin = (int16_t)(turn_norm * 70);
+            left  = -spin;
+            right = spin;
+        } else {
+            /*int16_t throttle = 80;
+            int16_t steering = (int16_t)(turn_norm 30);
+            left  = throttle + steering;
+            right = throttle - steering;*/
+            left  = 0;
+            right = 0;
+        }
+
         if (left  >  100) left  =  100;
         if (left  < -100) left  = -100;
         if (right >  100) right =  100;
@@ -78,12 +96,10 @@ static void auto_mode(void) {
 
         dbg_auto_left  = left;
         dbg_auto_right = right;
-
         Motor_Set((int8_t)left, (int8_t)right);
     } else {
         Motor_Stop();
     }
-  
 }
 
 /*static void auto_mode(void) {
