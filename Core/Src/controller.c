@@ -3,14 +3,20 @@
 #include "motor.h"
 #include "sensor.h"
 #include "stm32f4xx_hal.h"
+#include "lidar.h"
 
 extern TIM_HandleTypeDef htim3;
 
 static Receiver rx_turning;   // CH1 PA6 LR
 static Receiver rx_throttle;   // CH2 PA7 UD
 static Receiver rx_switch;   // CH3 PB0 auto/manual
+//static uint32_t next_turn = 0; //use for demo
 
-static uint32_t next_turn = 0;
+volatile uint8_t  dbg_auto_enemy_active = 0;
+volatile float    dbg_auto_enemy_angle = 0;
+volatile uint16_t dbg_auto_enemy_dist = 0;
+volatile int16_t  dbg_auto_left = 0;
+volatile int16_t  dbg_auto_right = 0;
 
 void Controller_Init(void) {
     Receiver_Init(&rx_turning, &htim3, TIM_CHANNEL_2);  // PA6
@@ -48,16 +54,39 @@ static void manual_mode(void) {
     Motor_Set((int8_t)left, (int8_t)right);
 }
 
-/*static void auto_mode(void) {
+static void auto_mode(void) {
     EdgeState e = Sensor_ReadEdge();
     if (e.left || e.right) {
         Sensor_EdgeAvoid();
-    } else {
-        Motor_Stop(); 
+        return;
     }
-}*/
+    EnemyState enemy = Lidar_GetEnemyState(180.0f, 10, 600);
+    dbg_auto_enemy_active = enemy.enemy_detected;
+    dbg_auto_enemy_angle  = enemy.angle_deg;
+    dbg_auto_enemy_dist   = enemy.dist_mm;
 
-static void auto_mode(void) {
+    if (enemy.enemy_detected) {
+        int16_t throttle = (int16_t)(enemy.speed_norm * 80);
+        int16_t steering = (int16_t)(enemy.turn_norm  * 80);
+
+        int16_t left  = throttle + steering;
+        int16_t right = throttle - steering;
+        if (left  >  100) left  =  100;
+        if (left  < -100) left  = -100;
+        if (right >  100) right =  100;
+        if (right < -100) right = -100;
+
+        dbg_auto_left  = left;
+        dbg_auto_right = right;
+
+        Motor_Set((int8_t)left, (int8_t)right);
+    } else {
+        Motor_Stop();
+    }
+  
+}
+
+/*static void auto_mode(void) {
     EdgeState e = Sensor_ReadEdge();
     if (e.left || e.right) {
         Sensor_EdgeAvoid();
@@ -77,7 +106,7 @@ static void auto_mode(void) {
     }
 
     Motor_Set(80, 80);
-}
+}*/
 
 void Controller_Update(void) {
     if (is_auto_mode()) {
